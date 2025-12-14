@@ -98,10 +98,42 @@ function applyStaticTranslations() {
 let recipes = [];
 let available = [];
 
+// ------------------ Firestore (recipes only) ------------------
+const recipesCollection = () => db.collection("recipes");
+
+async function loadRecipesFromCloud() {
+  try {
+    const snapshot = await recipesCollection().get();
+    if (!snapshot.empty) {
+      recipes = snapshot.docs.map(doc => doc.data());
+      localStorage.setItem("recipes", JSON.stringify(recipes));
+    }
+  } catch (err) {
+    console.warn("Cloud load failed, using local data");
+  }
+}
+
+async function saveRecipeToCloud(recipe) {
+  try {
+    await recipesCollection().doc(String(recipe.id)).set(recipe);
+  } catch (err) {
+    console.warn("Cloud save failed");
+  }
+}
+
+async function deleteRecipeFromCloud(id) {
+  try {
+    await recipesCollection().doc(String(id)).delete();
+  } catch (err) {
+    console.warn("Cloud delete failed");
+  }
+}
+
 function loadData() {
   try {
     recipes = JSON.parse(localStorage.getItem("recipes") || "[]");
-    available = JSON.parse(localStorage.getItem("available") || "[]");
+loadRecipesFromCloud();
+available = JSON.parse(localStorage.getItem("available") || "[]");
   } catch {
     recipes = [];
     available = [];
@@ -268,7 +300,19 @@ function renderRecipes() {
 }
 
 // ------------------ Event listeners ------------------
-function setupEventListeners() {
+function setupEventListeners(const toggleCookableBtn = document.getElementById("toggleCookable");
+
+if (toggleCookableBtn && filterCookable) {
+  toggleCookableBtn.addEventListener("click", () => {
+    filterCookable.checked = !filterCookable.checked;
+
+    toggleCookableBtn.textContent = filterCookable.checked
+      ? "Show all recipes"
+      : "Show cookable only";
+
+    renderRecipes();
+  });
+}) {
   const addIngredientForm = document.getElementById("add-ingredient-form");
   const ingredientInput = document.getElementById("ingredientInput");
   const clearIngredientsBtn = document.getElementById("clear-ingredients");
@@ -375,18 +419,19 @@ function setupEventListeners() {
         return;
       }
 
-      recipes.push({
-        id: Date.now(),
-        name,
-        ingredients,
-        instructions,
-        category,
-        time,
-        imageUrl,
-        favorite: false
-      });
+recipes.push({
+  id: Date.now(),
+  name,
+  ingredients,
+  instructions,
+  category,
+  time,
+  imageUrl,
+  favorite: false
+});
 
-      saveData();
+saveRecipeToCloud(recipes[recipes.length - 1]);
+saveData();
 
       nameEl.value = "";
       ingredientsEl.value = "";
@@ -414,9 +459,10 @@ function setupEventListeners() {
         target.closest(".delete-recipe")
       ) {
         if (confirm(t("confirmDeleteRecipe"))) {
-          recipes = recipes.filter((r) => r.id !== id);
-          saveData();
-          renderRecipes();
+recipes = recipes.filter((r) => r.id !== id);
+deleteRecipeFromCloud(id);
+saveData();
+renderRecipes();
         }
       } else if (
         target.classList.contains("favorite-btn") ||
